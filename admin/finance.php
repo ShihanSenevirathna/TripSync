@@ -143,6 +143,7 @@ while ($c = $category_rev->fetch_assoc()) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css">
     <link rel="stylesheet" href="assets/files/index-BjODfbg0.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
         body {
@@ -239,15 +240,8 @@ endif; ?>
                                     <h3 class="text-lg font-bold text-gray-900">Revenue Overview</h3>
                                     <span class="text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full">Last 6 Months</span>
                                 </div>
-                                <div class="h-64 flex items-end justify-between gap-4 px-2">
-                                    <?php foreach ($monthly_revenue as $r): ?>
-                                        <?php $height = $max_revenue > 0 ? ($r['total'] / $max_revenue) * 100 : 0; ?>
-                                        <div class="flex-1 flex flex-col items-center gap-3">
-                                            <div class="w-full bg-teal-500 rounded-t-lg transition-all hover:bg-teal-600"
-                                                style="height: <?php echo max(5, $height); ?>%"></div>
-                                            <span class="text-[10px] font-bold text-gray-400 uppercase"><?php echo $r['month']; ?></span>
-                                        </div>
-                                    <?php endforeach; ?>
+                                <div class="h-64 relative">
+                                    <canvas id="revenueChart"></canvas>
                                 </div>
                             </div>
                         </div>
@@ -256,27 +250,8 @@ endif; ?>
                         <div class="lg:col-span-1">
                             <div class="bg-white rounded-2xl border border-gray-100 p-6 h-full flex flex-col">
                                 <h3 class="text-lg font-bold text-gray-900 mb-5">Service Breakdown</h3>
-                                <div class="space-y-6 flex-1">
-                                    <?php 
-                                    $types = ['hotel' => 'bg-amber-500', 'vehicle' => 'bg-emerald-500', 'tour' => 'bg-rose-500'];
-                                    foreach($types as $type => $color): 
-                                        $amount = $categories[$type] ?? 0;
-                                        $pct = $total_cat_rev > 0 ? ($amount / $total_cat_rev) * 100 : 0;
-                                    ?>
-                                        <div>
-                                            <div class="flex items-center justify-between mb-2">
-                                                <div class="flex items-center gap-2">
-                                                    <div class="w-2 h-2 rounded-full <?php echo $color; ?>"></div>
-                                                    <span class="text-xs font-bold text-gray-700 capitalize"><?php echo $type; ?>s</span>
-                                                </div>
-                                                <span class="text-xs font-bold text-gray-900"><?php echo round($pct); ?>%</span>
-                                            </div>
-                                            <div class="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                                                <div class="h-full <?php echo $color; ?> transition-all duration-1000" style="width: <?php echo $pct; ?>%"></div>
-                                            </div>
-                                            <p class="text-[10px] text-gray-400 mt-1 font-medium">Total: LKR <?php echo number_format($amount); ?></p>
-                                        </div>
-                                    <?php endforeach; ?>
+                                <div class="flex-1 flex items-center justify-center min-h-[200px]">
+                                    <canvas id="serviceChart"></canvas>
                                 </div>
                                 <div class="pt-5 mt-5 border-t border-gray-50">
                                     <p class="text-xs text-gray-500 text-center">Total Platform Revenue: <span class="font-bold text-gray-900">LKR <?php echo number_format($total_cat_rev); ?></span></p>
@@ -480,6 +455,102 @@ endif; ?>
                 }
             });
         }
+
+        // Revenue Chart
+        const revCtx = document.getElementById('revenueChart').getContext('2d');
+        new Chart(revCtx, {
+            type: 'bar',
+            data: {
+                labels: <?php echo json_encode(array_column($monthly_revenue, 'month')); ?>,
+                datasets: [{
+                    label: 'Revenue',
+                    data: <?php echo json_encode(array_column($monthly_revenue, 'total')); ?>,
+                    backgroundColor: '#14b8a6',
+                    borderRadius: 8,
+                    hoverBackgroundColor: '#0f766e'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#0f172a',
+                        padding: 12,
+                        cornerRadius: 8,
+                        callbacks: {
+                            label: function(context) {
+                                return 'LKR ' + new Intl.NumberFormat().format(context.raw);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false },
+                        ticks: {
+                            font: { size: 10 },
+                            callback: function(value) {
+                                if (value >= 1000) return (value/1000) + 'k';
+                                return value;
+                            }
+                        }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { font: { size: 10, weight: 'bold' } }
+                    }
+                }
+            }
+        });
+
+        // Service Breakdown Chart
+        const serviceCtx = document.getElementById('serviceChart').getContext('2d');
+        new Chart(serviceCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Hotels', 'Vehicles', 'Tours'],
+                datasets: [{
+                    data: [
+                        <?php echo $categories['hotel'] ?? 0; ?>,
+                        <?php echo $categories['vehicle'] ?? 0; ?>,
+                        <?php echo $categories['tour'] ?? 0; ?>
+                    ],
+                    backgroundColor: ['#f59e0b', '#10b981', '#ef4444'],
+                    borderWidth: 0,
+                    hoverOffset: 10
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 20,
+                            font: { size: 11, family: 'Inter', weight: 'bold' }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: '#0f172a',
+                        padding: 12,
+                        cornerRadius: 8,
+                        callbacks: {
+                            label: function(context) {
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const pct = total > 0 ? Math.round((context.raw / total) * 100) : 0;
+                                return context.label + ': LKR ' + new Intl.NumberFormat().format(context.raw) + ' (' + pct + '%)';
+                            }
+                        }
+                    }
+                },
+                cutout: '70%'
+            }
+        });
     </script>
     <script src="assets/files/index-Dammfq5V.js.download"></script>
 </body>

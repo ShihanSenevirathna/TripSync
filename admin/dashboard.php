@@ -77,6 +77,7 @@ if ($max_rev == 0)
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <link rel="stylesheet" href="assets/files/index-BjODfbg0.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
         body {
@@ -235,20 +236,8 @@ if ($max_rev == 0)
                                         class="text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full whitespace-nowrap">Last
                                         7 Days</span>
                                 </div>
-                                <div class="h-64 flex items-end justify-between gap-2 px-2 pb-2">
-                                    <?php foreach ($weekly_revenue as $day):
-    $height = ($day['amount'] / $max_rev) * 100;
-?>
-                                        <div class="flex-1 flex flex-col items-center group">
-                                            <div class="w-full bg-teal-50 rounded-t-lg relative transition-all hover:bg-teal-100" style="height: <?php echo max(5, $height); ?>%;">
-                                                <div class="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                                                    LKR <?php echo number_format($day['amount']); ?>
-                                                </div>
-                                            </div>
-                                            <span class="text-[10px] text-gray-400 mt-2 font-bold uppercase tracking-tighter"><?php echo $day['day']; ?></span>
-                                        </div>
-                                    <?php
-endforeach; ?>
+                                <div class="h-64 relative">
+                                    <canvas id="revenueChart"></canvas>
                                 </div>
                             </div>
                         </div>
@@ -449,6 +438,85 @@ endif; ?>
         // Poll every 10 seconds
         setInterval(updateMap, 10000);
         updateMap();
+
+        // Revenue Chart Initialization
+        const ctx = document.getElementById('revenueChart').getContext('2d');
+        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, 'rgba(20, 184, 166, 0.4)');
+        gradient.addColorStop(1, 'rgba(20, 184, 166, 0)');
+
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: <?php echo json_encode(array_column($weekly_revenue, 'day')); ?>,
+                datasets: [{
+                    label: 'Revenue',
+                    data: <?php echo json_encode(array_column($weekly_revenue, 'amount')); ?>,
+                    borderColor: '#14b8a6',
+                    borderWidth: 3,
+                    backgroundColor: gradient,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#fff',
+                    pointBorderColor: '#14b8a6',
+                    pointBorderWidth: 2,
+                    pointHoverRadius: 6,
+                    pointHoverBackgroundColor: '#14b8a6',
+                    pointHoverBorderColor: '#fff',
+                    pointHoverBorderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        backgroundColor: '#0f172a',
+                        titleFont: { size: 12, family: 'Outfit' },
+                        bodyFont: { size: 12, family: 'Inter' },
+                        padding: 12,
+                        cornerRadius: 8,
+                        displayColors: false,
+                        callbacks: {
+                            label: function(context) {
+                                return 'LKR ' + new Intl.NumberFormat().format(context.raw);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            display: true,
+                            color: 'rgba(0, 0, 0, 0.05)',
+                            drawBorder: false
+                        },
+                        ticks: {
+                            font: { size: 10, family: 'Inter' },
+                            color: '#94a3b8',
+                            callback: function(value) {
+                                if (value >= 1000) return 'LKR ' + (value/1000) + 'k';
+                                return 'LKR ' + value;
+                            }
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            font: { size: 10, family: 'Inter', weight: 'bold' },
+                            color: '#94a3b8'
+                        }
+                    }
+                }
+            }
+        });
     </script>
 
     <script src="assets/files/index-Dammfq5V.js.download"></script>
