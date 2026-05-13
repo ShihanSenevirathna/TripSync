@@ -14,7 +14,7 @@ $wallet = $walletResult->fetch_assoc();
 $balance = $wallet ? $wallet['balance'] : 0.00;
 
 // Get upcoming trips
-$plansStmt = $conn->prepare("SELECT * FROM travel_plans WHERE user_id = ? AND status IN ('planning', 'confirmed') ORDER BY start_date ASC");
+$plansStmt = $conn->prepare("SELECT p.*, (SELECT status FROM bookings WHERE plan_id = p.id AND type = 'vehicle' LIMIT 1) as vehicle_status FROM travel_plans p WHERE p.user_id = ? AND p.status IN ('planning', 'confirmed') ORDER BY start_date ASC");
 $plansStmt->bind_param("i", $userId);
 $plansStmt->execute();
 $plansResult = $plansStmt->get_result();
@@ -105,7 +105,7 @@ $hasActiveTrip = $activeTripStmt->get_result()->num_rows > 0;
                             <div class="flex items-center justify-between mb-6">
                                 <h2 class="text-xl font-bold text-gray-900">Upcoming Trips</h2>
                                 <a class="text-teal-600 hover:text-teal-700 text-sm font-medium cursor-pointer whitespace-nowrap"
-                                    href="#">+ New Trip</a>
+                                    href="plan_trip.php">+ New Trip</a>
                             </div>
                             <div class="space-y-4">
                                 <?php if (empty($upcomingTrips)): ?>
@@ -138,9 +138,21 @@ else: ?>
                                                     <div class="bg-teal-100 text-teal-700 px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap">
                                                         <?php echo ceil($daysLeft); ?> days left</div>
                                                     <?php
-        else: ?>
-                                                    <div class="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap">
-                                                        Started</div>
+                                        else: 
+                                            $vStatus = $trip['vehicle_status'] ?? '';
+                                            if ($vStatus === 'in_progress'): ?>
+                                                            <div class="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap">
+                                                                Started</div>
+                                                        <?php elseif ($vStatus === 'confirmed' || $vStatus === 'arrived'): ?>
+                                                            <div class="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap">
+                                                                Ready to Start</div>
+                                                        <?php elseif ($vStatus === 'pending'): ?>
+                                                            <div class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap">
+                                                                Awaiting Driver</div>
+                                                        <?php else: ?>
+                                                            <div class="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap">
+                                                                Planning</div>
+                                                        <?php endif; ?>
                                                     <?php
         endif; ?>
                                                 </div>
@@ -207,7 +219,7 @@ endif; ?>
                                 <h2 class="text-xl font-bold text-gray-900 mb-6">Quick Actions</h2>
                                 <div class="grid grid-cols-2 gap-3">
                                     <a class="bg-blue-500 p-4 rounded-xl text-white hover:opacity-90 transition-opacity cursor-pointer"
-                                        href="#">
+                                        href="marketplace.php?tab=hotels">
                                         <div
                                             class="w-10 h-10 flex items-center justify-center bg-white/20 rounded-lg mb-3">
                                             <i class="ri-hotel-line text-2xl"></i>
@@ -215,7 +227,7 @@ endif; ?>
                                         <p class="text-sm font-medium">Find Hotels</p>
                                     </a>
                                     <a class="bg-teal-500 p-4 rounded-xl text-white hover:opacity-90 transition-opacity cursor-pointer"
-                                        href="#">
+                                        href="marketplace.php?tab=vehicles">
                                         <div
                                             class="w-10 h-10 flex items-center justify-center bg-white/20 rounded-lg mb-3">
                                             <i class="ri-car-line text-2xl"></i>
@@ -223,7 +235,7 @@ endif; ?>
                                         <p class="text-sm font-medium">Book Vehicle</p>
                                     </a>
                                     <a class="bg-orange-500 p-4 rounded-xl text-white hover:opacity-90 transition-opacity cursor-pointer"
-                                        href="#">
+                                        href="plan_trip.php">
                                         <div
                                             class="w-10 h-10 flex items-center justify-center bg-white/20 rounded-lg mb-3">
                                             <i class="ri-add-circle-line text-2xl"></i>
@@ -231,7 +243,7 @@ endif; ?>
                                         <p class="text-sm font-medium">New Trip</p>
                                     </a>
                                     <a class="bg-purple-500 p-4 rounded-xl text-white hover:opacity-90 transition-opacity cursor-pointer"
-                                        href="#">
+                                        href="wallet.php">
                                         <div
                                             class="w-10 h-10 flex items-center justify-center bg-white/20 rounded-lg mb-3">
                                             <i class="ri-wallet-3-line text-2xl"></i>
@@ -295,9 +307,9 @@ endif; ?>
                                 <li><a class="text-teal-50 text-sm hover:text-white transition-colors cursor-pointer"
                                         href="trip_history.php">Trip History</a></li>
                                 <li><a class="text-teal-50 text-sm hover:text-white transition-colors cursor-pointer"
-                                        href="#">Messages</a></li>
+                                        href="messages.php">Messages</a></li>
                                 <li><a class="text-teal-50 text-sm hover:text-white transition-colors cursor-pointer"
-                                        href="#">Booking Confirmation</a></li>
+                                        href="booking_confirmation.php">Booking Confirmation</a></li>
                                 <li><a class="text-teal-50 text-sm hover:text-white transition-colors cursor-pointer"
                                         href="../partner/register.php">Become a Partner</a></li>
                             </ul>

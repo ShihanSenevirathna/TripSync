@@ -112,6 +112,19 @@ if ($vehicles_result && $vehicles_result->num_rows > 0) {
   <div id="root">
     <div class="min-h-screen bg-gradient-to-br from-gray-50 to-teal-50/30">
       <?php include 'includes/navbar.php'; ?>
+      
+      <?php if (isset($_GET['error']) && $_GET['error'] === 'already_booked'): ?>
+      <div class="fixed top-24 left-1/2 -translate-x-1/2 z-[100] w-full max-w-md px-4">
+        <div class="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
+          <i class="ri-error-warning-line text-xl"></i>
+          <div>
+            <p class="text-sm font-bold">Booking Conflict</p>
+            <p class="text-xs">You already have an active or pending booking for these dates.</p>
+          </div>
+          <button onclick="this.parentElement.parentElement.remove()" class="ml-auto text-rose-400 hover:text-rose-600"><i class="ri-close-line"></i></button>
+        </div>
+      </div>
+      <?php endif; ?>
 
       <section class="relative pt-20">
         <div class="relative w-full h-72 overflow-hidden">

@@ -25,6 +25,15 @@ if (isset($_GET['type']) && (isset($_GET['id']) || isset($_GET['service_id'])) &
     $pickup = $_GET['pickup'] ?? null;
     $dropoff = $_GET['dropoff'] ?? null;
 
+    // Check for existing active bookings of the same type that overlap with these dates
+    $checkStmt = $conn->prepare("SELECT id FROM bookings WHERE user_id = ? AND type = ? AND status IN ('pending', 'confirmed', 'arrived', 'in_progress') AND ((start_date <= ? AND end_date >= ?) OR (start_date <= ? AND end_date >= ?) OR (? <= start_date AND ? >= end_date))");
+    $checkStmt->bind_param("isssssss", $userId, $type, $start_date, $start_date, $end_date, $end_date, $start_date, $end_date);
+    $checkStmt->execute();
+    if ($checkStmt->get_result()->num_rows > 0) {
+        header("Location: marketplace.php?tab=" . ($type === 'vehicle' ? 'vehicles' : 'hotels') . "&error=already_booked");
+        exit;
+    }
+
     // Fetch owner if it's a vehicle
     $assigned_partner_id = null;
     if ($type === 'vehicle') {
