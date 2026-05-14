@@ -70,19 +70,33 @@ elseif ($sort === 'rating' || $sort === 'recommended') {
 $hotels = array_values($hotels);
 
 // Fetch Vehicles
-$vehicle_query = "SELECT * FROM vehicles WHERE 1=1";
-if ($search) {
-  $vehicle_query .= " AND (model LIKE '%" . $conn->real_escape_string($search) . "%' OR type LIKE '%" . $conn->real_escape_string($search) . "%')";
+$vehicle_query = "SELECT v.* FROM vehicles v WHERE 1=1";
+
+// Date-Range Availability Filter
+if (!empty($qs_checkin) && !empty($qs_checkout)) {
+  $vehicle_query .= " AND v.id NOT IN (
+        SELECT item_id FROM bookings 
+        WHERE type = 'vehicle' 
+        AND status IN ('confirmed', 'arrived', 'in_progress', 'pending')
+        AND (
+            (start_date <= '" . $conn->real_escape_string($qs_checkout) . " 23:59:59') AND 
+            (end_date >= '" . $conn->real_escape_string($qs_checkin) . " 00:00:00')
+        )
+    )";
 }
-$vehicle_query .= " AND price_per_day BETWEEN $min_price AND $max_price";
+
+if ($search) {
+  $vehicle_query .= " AND (v.model LIKE '%" . $conn->real_escape_string($search) . "%' OR v.type LIKE '%" . $conn->real_escape_string($search) . "%')";
+}
+$vehicle_query .= " AND v.price_per_day BETWEEN $min_price AND $max_price";
 if ($sort === 'price-low') {
-  $vehicle_query .= " ORDER BY price_per_day ASC";
+  $vehicle_query .= " ORDER BY v.price_per_day ASC";
 }
 elseif ($sort === 'price-high') {
-  $vehicle_query .= " ORDER BY price_per_day DESC";
+  $vehicle_query .= " ORDER BY v.price_per_day DESC";
 }
 elseif ($sort === 'rating') {
-  $vehicle_query .= " ORDER BY rating DESC";
+  $vehicle_query .= " ORDER BY v.rating DESC";
 }
 $vehicles_result = $conn->query($vehicle_query);
 $vehicles = [];
@@ -113,13 +127,19 @@ if ($vehicles_result && $vehicles_result->num_rows > 0) {
     <div class="min-h-screen bg-gradient-to-br from-gray-50 to-teal-50/30">
       <?php include 'includes/navbar.php'; ?>
       
-      <?php if (isset($_GET['error']) && $_GET['error'] === 'already_booked'): ?>
+      <?php if (isset($_GET['error'])): ?>
       <div class="fixed top-24 left-1/2 -translate-x-1/2 z-[100] w-full max-w-md px-4">
         <div class="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
           <i class="ri-error-warning-line text-xl"></i>
           <div>
             <p class="text-sm font-bold">Booking Conflict</p>
-            <p class="text-xs">You already have an active or pending booking for these dates.</p>
+            <p class="text-xs">
+              <?php 
+                if ($_GET['error'] === 'already_booked') echo "You already have an active or pending booking for these dates.";
+                elseif ($_GET['error'] === 'vehicle_busy') echo "This vehicle was just booked by another user for these dates.";
+                else echo "An error occurred with your booking. Please try again.";
+              ?>
+            </p>
           </div>
           <button onclick="this.parentElement.parentElement.remove()" class="ml-auto text-rose-400 hover:text-rose-600"><i class="ri-close-line"></i></button>
         </div>

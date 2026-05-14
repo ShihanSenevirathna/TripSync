@@ -25,13 +25,24 @@ if (isset($_GET['type']) && (isset($_GET['id']) || isset($_GET['service_id'])) &
     $pickup = $_GET['pickup'] ?? null;
     $dropoff = $_GET['dropoff'] ?? null;
 
-    // Check for existing active bookings of the same type that overlap with these dates
-    $checkStmt = $conn->prepare("SELECT id FROM bookings WHERE user_id = ? AND type = ? AND status IN ('pending', 'confirmed', 'arrived', 'in_progress') AND ((start_date <= ? AND end_date >= ?) OR (start_date <= ? AND end_date >= ?) OR (? <= start_date AND ? >= end_date))");
-    $checkStmt->bind_param("isssssss", $userId, $type, $start_date, $start_date, $end_date, $end_date, $start_date, $end_date);
-    $checkStmt->execute();
-    if ($checkStmt->get_result()->num_rows > 0) {
+    // 1. Check for USER overlapping bookings of the same type
+    $userCheckStmt = $conn->prepare("SELECT id FROM bookings WHERE user_id = ? AND type = ? AND status IN ('pending', 'confirmed', 'arrived', 'in_progress') AND (start_date <= ? AND end_date >= ?)");
+    $userCheckStmt->bind_param("isss", $userId, $type, $end_date, $start_date);
+    $userCheckStmt->execute();
+    if ($userCheckStmt->get_result()->num_rows > 0) {
         header("Location: marketplace.php?tab=" . ($type === 'vehicle' ? 'vehicles' : 'hotels') . "&error=already_booked");
         exit;
+    }
+
+    // 2. If vehicle, check if the VEHICLE itself is busy for these dates
+    if ($type === 'vehicle') {
+        $vehCheckStmt = $conn->prepare("SELECT id FROM bookings WHERE item_id = ? AND type = 'vehicle' AND status IN ('pending', 'confirmed', 'arrived', 'in_progress') AND (start_date <= ? AND end_date >= ?)");
+        $vehCheckStmt->bind_param("sss", $item_id, $end_date, $start_date);
+        $vehCheckStmt->execute();
+        if ($vehCheckStmt->get_result()->num_rows > 0) {
+            header("Location: marketplace.php?tab=vehicles&error=vehicle_busy");
+            exit;
+        }
     }
 
     // Fetch owner if it's a vehicle

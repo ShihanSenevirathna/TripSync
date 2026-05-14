@@ -43,30 +43,36 @@ $top_dest = $stmt->get_result()->fetch_assoc();
 // Get total distance (simulation or actual if available in future, for now let's use a scale of days * 100km)
 $total_distance = $stats_result['total_days'] * 125;
 
-// Fetch trips (bookings) with their reviews status
+// Fetch trips (Grouped by Plan if available)
 $filter = isset($_GET['filter']) ? $_GET['filter'] : 'all';
 $sort = isset($_GET['sort']) ? $_GET['sort'] : 'newest';
 
-$order_by = "b.created_at DESC";
-if ($sort === 'oldest')
-    $order_by = "b.created_at ASC";
-if ($sort === 'cost')
-    $order_by = "b.total_price DESC";
+$order_by = "MAX(b.created_at) DESC";
+if ($sort === 'oldest') $order_by = "MAX(b.created_at) ASC";
+if ($sort === 'cost') $order_by = "SUM(b.total_price) DESC";
 
 $where_clause = "b.user_id = ? AND (b.status = 'completed' OR b.status = 'confirmed' OR b.status = 'pending')";
 if ($filter === 'reviewed') {
     $where_clause .= " AND r.id IS NOT NULL";
-}
-elseif ($filter === 'needs_review') {
+} elseif ($filter === 'needs_review') {
     $where_clause .= " AND r.id IS NULL AND b.status = 'completed'";
 }
 
-$trips_query = "SELECT b.id as booking_id, b.*, b.status as booking_status, 
-                       tp.name as plan_name, tp.start_date as tp_start, tp.end_date as tp_end,
-                       r.rating, r.id as review_id,
-                       u_partner.name as partner_name, u_partner.profile_pic as partner_pic,
-                       v.model as vehicle_model, v.image_path as vehicle_img,
-                       h.name as hotel_name, h.image_path as hotel_img
+// Optimized query: Group by plan_id to avoid "duplication" of cards for same trip
+$trips_query = "SELECT 
+                    b.plan_id,
+                    GROUP_CONCAT(b.id) as booking_ids,
+                    GROUP_CONCAT(b.type) as booking_types,
+                    GROUP_CONCAT(b.status) as booking_statuses,
+                    GROUP_CONCAT(b.reference_no) as reference_nos,
+                    SUM(b.total_price) as grand_total,
+                    MAX(b.status) as latest_status,
+                    tp.name as plan_name, tp.start_date as tp_start, tp.end_date as tp_end,
+                    MAX(r.rating) as rating, MAX(r.id) as review_id,
+                    MAX(u_partner.name) as partner_name, MAX(u_partner.profile_pic) as partner_pic,
+                    MAX(v.model) as vehicle_model, MAX(v.image_path) as vehicle_img,
+                    MAX(h.name) as hotel_name, MAX(h.image_path) as hotel_img,
+                    MAX(b.start_date) as b_start, MAX(b.end_date) as b_end
                 FROM bookings b
                 LEFT JOIN travel_plans tp ON b.plan_id = tp.id
                 LEFT JOIN reviews r ON b.id = r.booking_id
@@ -74,6 +80,7 @@ $trips_query = "SELECT b.id as booking_id, b.*, b.status as booking_status,
                 LEFT JOIN vehicles v ON (b.type = 'vehicle' AND b.item_id = v.id)
                 LEFT JOIN hotels h ON (b.type = 'hotel' AND b.item_id = h.id)
                 WHERE $where_clause
+                GROUP BY b.plan_id, (CASE WHEN b.plan_id IS NULL THEN b.id ELSE 0 END)
                 ORDER BY $order_by";
 
 $stmt = $conn->prepare($trips_query);
@@ -82,18 +89,19 @@ $stmt->execute();
 $trips_res = $stmt->get_result();
 $trips = [];
 while ($row = $trips_res->fetch_assoc()) {
-    // If no plan, synthesize trip metadata
+    $row['booking_id'] = explode(',', $row['booking_ids'])[0]; // Principal ID for links
+    $row['types_array'] = explode(',', $row['booking_types']);
+    
     if (!$row['plan_id']) {
-        $row['name'] = ($row['type'] === 'vehicle') ? "Vehicle Rental: " . $row['vehicle_model'] : "Hotel Stay: " . $row['hotel_name'];
-        // Use booking dates if no plan dates
-        $row['start_date'] = $row['start_date']; 
-        $row['end_date'] = $row['end_date'];
-        $row['cities'] = ($row['type'] === 'vehicle') ? ['Car Rental'] : ['Accommodation'];
+        $row['name'] = (in_array('vehicle', $row['types_array'])) ? "Vehicle Rental: " . $row['vehicle_model'] : "Hotel Stay: " . $row['hotel_name'];
+        $row['start_date'] = $row['b_start']; 
+        $row['end_date'] = $row['b_end'];
+        $row['cities'] = (in_array('vehicle', $row['types_array'])) ? ['Car Rental'] : ['Accommodation'];
     } else {
-        // Use plan name
         $row['name'] = $row['plan_name'];
+        $row['start_date'] = $row['tp_start'];
+        $row['end_date'] = $row['tp_end'];
         
-        // Fetch destinations for this trip
         $dest_stmt = $conn->prepare("SELECT location_name FROM destinations WHERE plan_id = ? ORDER BY day_number ASC");
         $dest_stmt->bind_param("i", $row['plan_id']);
         $dest_stmt->execute();
@@ -105,10 +113,14 @@ while ($row = $trips_res->fetch_assoc()) {
         $row['cities'] = $destinations;
     }
 
+    // Combined Price
+    $row['total_price'] = $row['grand_total'];
+    $row['reference_no'] = explode(',', $row['reference_nos'])[0];
+
     // Determine representative image
-    if ($row['type'] === 'vehicle') {
+    if (in_array('vehicle', $row['types_array']) && !empty($row['vehicle_img'])) {
         $row['display_img'] = getVehicleImage($row['vehicle_img'], '../');
-    } elseif ($row['type'] === 'hotel' && !empty($row['hotel_img'])) {
+    } elseif (in_array('hotel', $row['types_array']) && !empty($row['hotel_img'])) {
         $row['display_img'] = '../assets/images/' . $row['hotel_img'];
     } else {
         $row['display_img'] = '../assets/images/placeholder.jpg';
@@ -238,7 +250,7 @@ else: ?>
         $days = $interval->days + 1;
 
         $img_path = $trip['display_img'] ?: '../assets/images/placeholder.jpg';
-        $status = $trip['booking_status'];
+        $status = $trip['latest_status'];
 ?>
                             <div
                                 class="bg-white rounded-2xl border border-gray-200 overflow-hidden hover:shadow-lg transition-all">
@@ -291,6 +303,7 @@ else: ?>
         endforeach; ?>
                                         </div>
                                         <div class="flex items-center gap-6 mb-4 flex-wrap">
+                                            <?php if (in_array('vehicle', $trip['types_array'])): ?>
                                             <div class="flex items-center gap-2">
                                                 <div class="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-gray-100 flex items-center justify-center border border-gray-100">
                                                     <?php if (!empty($trip['partner_name'])): ?>
@@ -306,6 +319,9 @@ else: ?>
                                                     <p class="text-xs text-gray-400">Verified Driver</p>
                                                 </div>
                                             </div>
+                                            <?php endif; ?>
+
+                                            <?php if (in_array('hotel', $trip['types_array'])): ?>
                                             <div class="flex items-center gap-2">
                                                 <div
                                                     class="w-8 h-8 flex items-center justify-center bg-teal-50 rounded-full flex-shrink-0">
@@ -313,6 +329,7 @@ else: ?>
                                                 </div>
                                                 <p class="text-xs text-gray-600">Premium Stay Included</p>
                                             </div>
+                                            <?php endif; ?>
                                         </div>
                                         <div class="flex items-center justify-between flex-wrap gap-3">
                                             <div>
@@ -337,7 +354,7 @@ else: ?>
                                                     class="flex items-center gap-1.5 px-4 py-2 border border-gray-200 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap cursor-pointer"><i
                                                         class="ri-file-list-3-line text-xs"></i>Receipt</a>
                                                 
-                                                <?php if ($trip['status'] == 'confirmed'): ?>
+                                                <?php if ($status == 'confirmed'): ?>
                                                     <a class="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-xs font-medium rounded-lg hover:bg-emerald-700 transition-colors whitespace-nowrap cursor-pointer"
                                                         href="track_trip.php?booking_id=<?php echo $trip['booking_id']; ?>" data-discover="true"><i
                                                             class="ri-map-pin-line text-xs"></i>Track Trip</a>
@@ -349,7 +366,7 @@ else: ?>
                                                         href="reviews.php" data-discover="true"><i
                                                             class="ri-eye-line text-xs"></i>View Review</a>
                                                 <?php
-        elseif ($trip['status'] == 'completed'): ?>
+        elseif ($status == 'completed'): ?>
                                                     <a class="flex items-center gap-1.5 px-4 py-2 bg-teal-600 text-white text-xs font-medium rounded-lg hover:bg-teal-700 transition-colors whitespace-nowrap cursor-pointer"
                                                         href="rate_trip.php?booking_id=<?php echo $trip['booking_id']; ?>" data-discover="true"><i
                                                             class="ri-star-line text-xs"></i>Write Review</a>
@@ -360,7 +377,7 @@ else: ?>
                                                     href="messages.php" data-discover="true"><i
                                                         class="ri-message-3-line text-xs"></i>Message</a>
 
-                                                <?php if ($trip['status'] == 'pending' || $trip['status'] == 'confirmed'): ?>
+                                                <?php if ($status == 'pending' || $status == 'confirmed'): ?>
                                                     <button onclick="cancelBooking(<?php echo $trip['booking_id']; ?>)" 
                                                         class="flex items-center gap-1.5 px-4 py-2 border border-rose-200 text-rose-600 text-xs font-bold rounded-lg hover:bg-rose-50 transition-colors whitespace-nowrap cursor-pointer">
                                                         <i class="ri-close-circle-line text-xs"></i>Cancel Booking
