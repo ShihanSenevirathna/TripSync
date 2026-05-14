@@ -24,10 +24,34 @@ while ($row = $plansResult->fetch_assoc()) {
 }
 
 // Get travel stats
-$statsStmt = $conn->prepare("SELECT COUNT(*) as total_trips FROM travel_plans WHERE user_id = ?");
+$statsStmt = $conn->prepare("SELECT 
+    COUNT(id) as total_trips,
+    IFNULL(SUM(DATEDIFF(end_date, start_date) + 1), 0) as total_days
+    FROM travel_plans 
+    WHERE user_id = ? AND status = 'completed'");
 $statsStmt->bind_param("i", $userId);
 $statsStmt->execute();
-$totalTrips = $statsStmt->get_result()->fetch_assoc()['total_trips'];
+$statsResult = $statsStmt->get_result()->fetch_assoc();
+$totalTrips = $statsResult['total_trips'];
+$totalDistance = $statsResult['total_days'] * 125; // Simulation like in trip_history.php
+
+// Get favorite destination
+$destStmt = $conn->prepare("SELECT location_name, COUNT(*) as count FROM destinations d 
+               JOIN travel_plans tp ON d.plan_id = tp.id 
+               WHERE tp.user_id = ? GROUP BY location_name ORDER BY count DESC LIMIT 1");
+$destStmt->bind_param("i", $userId);
+$destStmt->execute();
+$topDest = $destStmt->get_result()->fetch_assoc();
+$favoriteDestination = $topDest ? $topDest['location_name'] : 'N/A';
+
+// Get districts visited (unique locations)
+$districtsStmt = $conn->prepare("SELECT COUNT(DISTINCT location_name) as count FROM destinations d 
+                   JOIN travel_plans tp ON d.plan_id = tp.id 
+                   WHERE tp.user_id = ? AND tp.status IN ('confirmed', 'completed')");
+$districtsStmt->bind_param("i", $userId);
+$districtsStmt->execute();
+$districtsVisitedCount = $districtsStmt->get_result()->fetch_assoc()['count'];
+$districtsVisited = min($districtsVisitedCount, 25);
 
 // Get recent bookings
 $bookingsStmt = $conn->prepare("SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC LIMIT 4");
@@ -191,7 +215,7 @@ endif; ?>
                                         class="flex items-center justify-between p-4 bg-gradient-to-r from-orange-50 to-orange-100 rounded-xl">
                                         <div>
                                             <p class="text-sm text-gray-600 mb-1">Distance Traveled</p>
-                                            <p class="text-2xl font-bold text-orange-700">2,847 km</p>
+                                            <p class="text-2xl font-bold text-orange-700"><?php echo number_format($totalDistance); ?> km</p>
                                         </div>
                                         <div
                                             class="w-12 h-12 flex items-center justify-center bg-orange-600 rounded-full">
@@ -202,7 +226,7 @@ endif; ?>
                                         class="flex items-center justify-between p-4 bg-gradient-to-r from-indigo-50 to-indigo-100 rounded-xl">
                                         <div>
                                             <p class="text-sm text-gray-600 mb-1">Districts Visited</p>
-                                            <p class="text-2xl font-bold text-indigo-700">12/25</p>
+                                            <p class="text-2xl font-bold text-indigo-700"><?php echo $districtsVisited; ?>/25</p>
                                         </div>
                                         <div
                                             class="w-12 h-12 flex items-center justify-center bg-indigo-600 rounded-full">
@@ -211,7 +235,7 @@ endif; ?>
                                     </div>
                                     <div class="p-4 bg-gradient-to-r from-pink-50 to-pink-100 rounded-xl">
                                         <p class="text-sm text-gray-600 mb-1">Favorite Destination</p>
-                                        <p class="text-lg font-bold text-pink-700">Ella</p>
+                                        <p class="text-lg font-bold text-pink-700"><?php echo clean($favoriteDestination); ?></p>
                                     </div>
                                 </div>
                             </div>
