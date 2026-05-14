@@ -63,6 +63,12 @@ $stmt = $conn->prepare("SELECT SUM(total_price) as total FROM bookings WHERE ass
 $stmt->bind_param("i", $user_id);
 $stmt->execute();
 $pending_earnings = $stmt->get_result()->fetch_assoc()['total'] ?? 0;
+
+// Fetch latest pending or upcoming confirmed request for map preview
+$stmt = $conn->prepare("SELECT b.*, u.name as customer_name, u.profile_pic as customer_pic, u.phone as customer_phone FROM bookings b JOIN users u ON b.user_id = u.id WHERE b.assigned_partner_id = ? AND b.status IN ('pending', 'confirmed') AND b.start_date >= CURDATE() ORDER BY (CASE WHEN b.status = 'pending' THEN 1 ELSE 2 END), b.created_at DESC LIMIT 1");
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$latest_pending = $stmt->get_result()->fetch_assoc();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -408,61 +414,102 @@ endif; ?>
                             </div>
                         </div>
                     </div>
-
-                    <!-- Demand Heatmap & Nearby Hub -->
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                        <div class="lg:col-span-2">
-                             <div class="bg-white rounded-2xl shadow-lg border-2 border-emerald-500/20 overflow-hidden h-full">
-                                <div class="bg-emerald-600 px-6 py-4 flex items-center justify-between">
-                                    <div class="flex items-center gap-2 text-white">
-                                        <div class="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-                                            <i class="ri-broadcast-line text-lg animate-pulse"></i>
-                                        </div>
-                                        <h3 class="text-lg font-black uppercase tracking-tight">Nearby Hub: Live Broadcasts</h3>
+                                        <!-- Request Preview Map Section -->
+                    <div class="mb-6">
+                        <div class="bg-white rounded-2xl shadow-lg border-2 border-emerald-500/10 overflow-hidden">
+                            <div class="p-6 pb-4 flex items-center justify-between border-b border-gray-50">
+                                <div>
+                                    <h3 class="text-xl font-black text-gray-900 uppercase tracking-tight">Request Preview</h3>
+                                    <p class="text-xs text-gray-500 mt-1">Live routing for your next job</p>
+                                </div>
+                                <?php if ($latest_pending): ?>
+                                <div class="flex items-center gap-2">
+                                    <?php if ($latest_pending['status'] == 'pending'): ?>
+                                    <span class="px-3 py-1 bg-amber-500 text-white text-[10px] font-black rounded-full uppercase tracking-widest animate-pulse">New Request</span>
+                                    <?php else: ?>
+                                    <span class="px-3 py-1 bg-emerald-600 text-white text-[10px] font-black rounded-full uppercase tracking-widest">Confirmed Trip</span>
+                                    <?php endif; ?>
+                                    <span class="px-3 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-black rounded-full uppercase"><?php echo htmlspecialchars($latest_pending['type']); ?></span>
+                                </div>
+                                <?php else: ?>
+                                <span class="px-3 py-1 bg-gray-100 text-gray-400 text-[10px] font-black rounded-full uppercase">No Active Requests</span>
+                                <?php endif; ?>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 lg:grid-cols-4">
+                                <div class="lg:col-span-3 h-[450px] relative">
+                                    <div id="request-map" class="w-full h-full bg-gray-100">
+                                        <!-- Map injected by JS -->
                                     </div>
-                                    <span class="px-3 py-1 bg-white/20 text-white text-[10px] font-black rounded-full uppercase">Global Feed</span>
                                 </div>
                                 
-                                <div id="broadcast-feed" class="divide-y divide-gray-50 max-h-[500px] overflow-y-auto custom-scrollbar">
-                                    <!-- Dynamic broadcast items will be injected here -->
-                                    <div class="p-12 text-center text-gray-400">
-                                        <i class="ri-radar-line text-4xl mb-2 animate-spin-slow"></i>
-                                        <p class="text-sm font-medium">Scanning for nearby jobs...</p>
-                                    </div>
-                                </div>
-                             </div>
-                        </div>
+                                <div class="lg:col-span-1 p-6 bg-gray-50/50 border-l border-gray-100 flex flex-col justify-between">
+                                    <div class="space-y-6">
+                                        <div>
+                                            <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Your Location</p>
+                                            <div class="relative pl-6 border-l-2 border-dashed border-gray-200">
+                                                <div class="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-gray-900 border-2 border-white flex items-center justify-center">
+                                                    <i class="ri-steering-fill text-[8px] text-white"></i>
+                                                </div>
+                                                <p class="text-[10px] font-black text-gray-400 uppercase">You Are At</p>
+                                                <p class="text-sm font-bold text-gray-800">Colombo Fort Area</p>
+                                            </div>
+                                        </div>
 
-                        <div class="lg:col-span-1">
-                            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden h-full flex flex-col">
-                                <div class="p-6 pb-4">
-                                    <h3 class="text-lg font-bold text-gray-900">Demand Heatmap</h3>
-                                    <p class="text-xs text-gray-500 mt-1">Real-time traveler activity in your area</p>
-                                </div>
-                                <div id="demand-map" class="flex-1 bg-gray-100 relative min-h-[300px]">
-                                    <!-- Map injected by JS -->
-                                    <div class="absolute inset-0 flex items-center justify-center">
-                                        <i class="ri-map-pin-time-line text-4xl text-gray-300 animate-pulse"></i>
+                                        <?php if ($latest_pending): ?>
+                                        <div>
+                                            <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Customer Details</p>
+                                            <div class="flex items-center gap-4 mb-4">
+                                                <div class="w-12 h-12 rounded-full border-2 border-white shadow-sm overflow-hidden">
+                                                    <img src="<?php echo getProfilePic($latest_pending['customer_pic'], '../'); ?>" class="w-full h-full object-cover">
+                                                </div>
+                                                <div>
+                                                    <p class="font-bold text-gray-900"><?php echo htmlspecialchars($latest_pending['customer_name']); ?></p>
+                                                    <p class="text-xs text-gray-500">Customer</p>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="relative pl-6">
+                                                <div class="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center">
+                                                    <i class="ri-map-pin-user-fill text-[8px] text-white"></i>
+                                                </div>
+                                                <p class="text-[10px] font-black text-gray-400 uppercase">Pickup Location</p>
+                                                <p class="text-sm font-bold text-gray-800 truncate"><?php echo htmlspecialchars($latest_pending['pickup_location'] ?: 'Location Pending'); ?></p>
+                                                <?php if (empty($latest_pending['pickup_lat'])): ?>
+                                                <p class="text-[9px] text-rose-500 font-bold mt-1"><i class="ri-error-warning-line"></i> GPS Coordinates not set</p>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+
+                                        <div class="pt-6 border-t border-gray-100">
+                                            <div class="flex justify-between items-center mb-1">
+                                                <p class="text-[10px] font-black text-gray-400 uppercase">Estimated Share</p>
+                                                <p class="text-xs font-bold text-emerald-600">80%</p>
+                                            </div>
+                                            <p class="text-2xl font-black text-gray-900 italic">LKR <?php echo number_format($latest_pending['total_price'] * 0.8); ?></p>
+                                        </div>
+                                        <?php else: ?>
+                                        <div class="flex flex-col items-center justify-center py-8 text-center border-2 border-dashed border-gray-200 rounded-xl bg-white">
+                                            <i class="ri-radar-line text-3xl text-emerald-400 mb-2 animate-spin-slow"></i>
+                                            <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-relaxed">System scanning for<br>nearby requests</p>
+                                        </div>
+                                        <?php endif; ?>
                                     </div>
-                                </div>
-                                <div class="p-4 bg-gray-50 border-t border-gray-100 grid grid-cols-2 gap-2">
-                                    <div class="text-center">
-                                        <p class="text-[10px] font-black text-gray-400 uppercase">Avg. Fare</p>
-                                        <p class="text-sm font-bold text-emerald-600">LKR 4,200</p>
+
+                                    <?php if ($latest_pending): ?>
+                                    <div class="mt-8 space-y-3">
+                                        <?php if ($latest_pending['status'] == 'pending'): ?>
+                                        <button onclick="handleRequest(<?php echo $latest_pending['id']; ?>, 'confirmed')" class="w-full py-4 bg-emerald-600 text-white font-black uppercase tracking-widest rounded-xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 text-xs">Accept Job</button>
+                                        <button onclick="handleRequest(<?php echo $latest_pending['id']; ?>, 'decline')" class="w-full py-3 bg-white text-gray-400 font-black uppercase tracking-widest rounded-xl border border-gray-100 hover:bg-gray-50 transition-all text-[10px]">Decline</button>
+                                        <?php else: ?>
+                                        <a href="active-trip.php" class="w-full py-4 bg-gray-900 text-white font-black uppercase tracking-widest rounded-xl hover:bg-emerald-600 transition-all shadow-lg shadow-gray-200 text-xs block text-center">Start Service</a>
+                                        <?php endif; ?>
                                     </div>
-                                    <div class="text-center border-l border-gray-200">
-                                        <p class="text-[10px] font-black text-gray-400 uppercase">Wait Time</p>
-                                        <p class="text-sm font-bold text-amber-600">~12 Mins</p>
-                                    </div>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                        <!-- Left & Center: Job Feed -->
-
-                </div>
+                    </div>    </div>
             </div>
 
             <!-- Footer -->
@@ -601,127 +648,59 @@ endif; ?>
             }
         }
 
-        // Demand Heatmap Implementation
+        // Request Preview Map Implementation
         document.addEventListener('DOMContentLoaded', function() {
-            const mapEl = document.getElementById('demand-map');
+            const mapEl = document.getElementById('request-map');
             if (mapEl) {
-                const map = L.map('demand-map', {
+                const driverPos = [6.9319, 79.8478]; // Mock driver location
+                
+                const map = L.map('request-map', {
                     scrollWheelZoom: false,
                     zoomControl: false
-                }).setView([6.9271, 79.8612], 12);
+                }).setView(driverPos, 13);
 
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     attribution: '© OSM'
                 }).addTo(map);
 
-                const spots = [
-                    { lat: 6.9271, lng: 79.8612, color: 'red', label: 'Colombo Fort (Very High)' },
-                    { lat: 7.1889, lng: 79.8839, color: 'red', label: 'Bandaranaike Airport (Peak)' },
-                    { lat: 6.8483, lng: 79.9265, color: 'orange', label: 'Maharagama (Medium)' }
-                ];
-
-                spots.forEach(spot => {
-                    L.circle([spot.lat, spot.lng], {
-                        color: spot.color,
-                        fillColor: spot.color,
-                        fillOpacity: 0.4,
-                        radius: 1200,
-                        stroke: false
-                    }).addTo(map).bindPopup(spot.label);
+                // Driver Icon
+                const driverIcon = L.divIcon({
+                    html: '<div class="w-10 h-10 bg-gray-900 rounded-full border-2 border-white shadow-xl flex items-center justify-center text-white"><i class="ri-steering-2-fill text-lg"></i></div>',
+                    className: 'custom-div-icon',
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 20]
                 });
-            }
-
-            // Simulate Live Broadcasts
-            simulateBroadcasts();
-        });
-
-        async function simulateBroadcasts() {
-            const feed = document.getElementById('broadcast-feed');
-            
-            try {
-                const response = await fetch('../api/get_broadcasts.php');
-                const result = await response.json();
                 
-                let broadcasts = [];
-                if (result.success && result.broadcasts.length > 0) {
-                    broadcasts = result.broadcasts.map(b => ({
-                        id: b.id,
-                        customer: b.customer_name,
-                        from: b.pickup_location || 'Colombo (Pickup)',
-                        to: b.dropoff_location || 'Destination',
-                        fare: b.total_price,
-                        type: b.type
-                    }));
-                } else {
-                    // Fallback mock data for demo
-                    broadcasts = [
-                        { id: 101, customer: 'Sarah', from: 'Colombo 07', to: 'Mount Lavinia', fare: 13500, type: 'sedan' },
-                        { id: 102, customer: 'Robert Chen', from: 'Airport (CMB)', to: 'Kandy', fare: 29200, type: 'van' },
-                        { id: 103, customer: 'Alice Wong', from: 'Galle Face', to: 'Sigiriya', fare: 50900, type: 'suv' }
-                    ];
-                }
+                // Always add Driver Marker
+                L.marker(driverPos, { icon: driverIcon }).addTo(map).bindPopup("<b>You</b><br>Available");
 
-                feed.innerHTML = broadcasts.map(job => `
-                    <div class="p-6 hover:bg-emerald-50/20 transition-all group relative overflow-hidden">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-400">
-                                    <i class="ri-user-smile-fill text-xl"></i>
-                                </div>
-                                <div>
-                                    <h4 class="font-bold text-gray-900">${job.customer}</h4>
-                                    <p class="text-[10px] font-black text-emerald-600 uppercase tabular-nums">Broadcasted Now</p>
-                                </div>
-                            </div>
-                            <div class="text-right">
-                                <p class="text-lg font-black text-gray-900">LKR ${Math.round(job.fare).toLocaleString()}</p>
-                                <p class="text-[9px] text-gray-400 font-bold uppercase">${job.type} Requested</p>
-                            </div>
-                        </div>
-                        <div class="space-y-2 mb-4">
-                            <div class="flex items-center gap-2 text-xs text-gray-600">
-                                <i class="ri-map-pin-user-line text-emerald-500"></i>
-                                <span class="font-bold">From:</span> ${job.from}
-                            </div>
-                            <div class="flex items-center gap-2 text-xs text-gray-600">
-                                <i class="ri-map-pin-5-line text-rose-500"></i>
-                                <span class="font-bold">To:</span> ${job.to}
-                            </div>
-                        </div>
-                        <button onclick="acceptBroadcast(${job.id})" class="w-full py-2.5 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100">
-                            Accept Job Instantly
-                        </button>
-                    </div>
-                `).join('');
-            } catch (error) {
-                console.error('Failed to fetch broadcasts:', error);
-            }
-        }
-
-        async function acceptBroadcast(id) {
-            if (!confirm('Are you sure you want to accept this broadcasted job?')) return;
-            
-            try {
-                const response = await fetch('../api/accept_broadcast.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        booking_id: id
-                    })
+                <?php if ($latest_pending && !empty($latest_pending['pickup_lat'])): ?>
+                const pickupPos = [<?php echo (float)($latest_pending['pickup_lat'] ?? 0); ?>, <?php echo (float)($latest_pending['pickup_lng'] ?? 0); ?>];
+                
+                // Pickup Marker
+                const pickupIcon = L.divIcon({
+                    html: '<div class="w-10 h-10 bg-emerald-500 rounded-full border-2 border-white shadow-xl flex items-center justify-center text-white"><i class="ri-user-location-fill text-lg"></i></div>',
+                    className: 'custom-div-icon',
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 20]
                 });
+                L.marker(pickupPos, { icon: pickupIcon }).addTo(map).bindPopup("<b>Pickup: <?php echo addslashes($latest_pending['customer_name']); ?></b>");
 
-                const data = await response.json();
-                if (data.success) {
-                    alert("Job Accepted! Redirecting to setup...");
-                    window.location.href = "active-trip.php";
-                } else {
-                    alert('Error: ' + data.message);
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('An unexpected error occurred during acceptance.');
+                // Fit bounds
+                const bounds = L.latLngBounds([driverPos, pickupPos]);
+                map.fitBounds(bounds, { padding: [80, 80] });
+
+                // Draw route line
+                L.polyline([driverPos, pickupPos], {
+                    color: '#10b981',
+                    weight: 4,
+                    dashArray: '10, 15',
+                    opacity: 0.7,
+                    lineCap: 'round'
+                }).addTo(map);
+                <?php endif; ?>
             }
-        }
+        });
     </script>
 </body>
 </html>

@@ -300,8 +300,9 @@ else: ?>
     if (!empty($b['image_path'])) {
       if (strpos($b['image_path'], 'http') === 0) {
         $img = $b['image_path'];
-      }
-      else {
+      } elseif ($b['type'] === 'vehicle') {
+        $img = getVehicleImage($b['image_path'], '../');
+      } else {
         $full_path = __DIR__ . '/../assets/images/' . $b['image_path'];
         if (file_exists($full_path)) {
           $img = '../assets/images/' . $b['image_path'];
@@ -310,7 +311,6 @@ else: ?>
     }
 
     if (empty($img)) {
-      // Fallback to placeholder if static map fails or wasn't generated
       $img = '../assets/images/placeholder.jpg';
     }
 ?>

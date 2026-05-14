@@ -106,8 +106,8 @@ while ($row = $trips_res->fetch_assoc()) {
     }
 
     // Determine representative image
-    if ($row['type'] === 'vehicle' && !empty($row['vehicle_img'])) {
-        $row['display_img'] = '../assets/images/' . $row['vehicle_img'];
+    if ($row['type'] === 'vehicle') {
+        $row['display_img'] = getVehicleImage($row['vehicle_img'], '../');
     } elseif ($row['type'] === 'hotel' && !empty($row['hotel_img'])) {
         $row['display_img'] = '../assets/images/' . $row['hotel_img'];
     } else {

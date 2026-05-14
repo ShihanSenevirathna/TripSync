@@ -130,6 +130,44 @@ function getProfilePic($filename, $prefix = '')
     return $prefix . 'assets/images/' . $default;
 }
 
+/**
+ * Get the vehicle image path with fallback logic
+ * 
+ * @param string|null $filename
+ * @param string $prefix Prefix for relative paths (e.g., '../' or '')
+ * @return string
+ */
+function getVehicleImage($filename, $prefix = '')
+{
+    $default = 'vehicle_details/placeholder.jpg';
+    // Use realpath to ensure we have the correct base directory
+    $basePath = realpath(dirname(__DIR__) . '/assets/images');
+
+    if (!$basePath) {
+        return $prefix . 'assets/images/' . $default;
+    }
+
+    if (empty($filename)) {
+        return $prefix . 'assets/images/' . $default;
+    }
+
+    // Get only the filename
+    $pureName = basename($filename);
+
+    // 1. Check assets/images/partners/ (New partner uploads)
+    if (file_exists($basePath . DIRECTORY_SEPARATOR . 'partners' . DIRECTORY_SEPARATOR . $pureName)) {
+        return $prefix . 'assets/images/partners/' . $pureName;
+    }
+
+    // 2. Check root assets/images/ (Legacy/Sample data)
+    if (file_exists($basePath . DIRECTORY_SEPARATOR . $pureName)) {
+        return $prefix . 'assets/images/' . $pureName;
+    }
+
+    // 3. Fallback to default
+    return $prefix . 'assets/images/' . $default;
+}
+
 require_once __DIR__ . '/../api/google_places_api.php';
 
 /**

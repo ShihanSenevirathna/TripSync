@@ -13,8 +13,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && isset($_
         $conn->query("UPDATE users SET status = 'active', rejection_reason = NULL WHERE id = $id");
         
         // Notify Partner
-        $title = "Congratulations! You're Approved";
-        $message = "Your partner account has been verified. You can now start accepting trip requests.";
+        $title = $conn->real_escape_string("Congratulations! You're Approved");
+        $message = $conn->real_escape_string("Your partner account has been verified. You can now start accepting trip requests.");
         $conn->query("INSERT INTO notifications (user_id, title, message, type) VALUES ($id, '$title', '$message', 'success')");
         
         $msg = "Partner approved successfully.";
@@ -23,8 +23,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && isset($_
         $conn->query("UPDATE users SET status = 'rejected', rejection_reason = '$reason' WHERE id = $id");
         
         // Notify Partner
-        $title = "Application Update";
-        $message = "Your partner application was not approved. Reason: $reason. Please update your documents and try again.";
+        $title = $conn->real_escape_string("Application Update");
+        $message = $conn->real_escape_string("Your partner application was not approved. Reason: $reason. Please update your documents and try again.");
         $conn->query("INSERT INTO notifications (user_id, title, message, type) VALUES ($id, '$title', '$message', 'warning')");
         
         $msg = "Partner application rejected.";

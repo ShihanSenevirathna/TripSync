@@ -112,6 +112,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $conn->prepare("INSERT INTO vehicles (owner_id, model, maker, reg_number, type, year, color, capacity, fuel_type, transmission, insurance_expiry, features, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE model = VALUES(model), maker = VALUES(maker), reg_number = VALUES(reg_number), type = VALUES(type), year = VALUES(year), color = VALUES(color), capacity = VALUES(capacity), fuel_type = VALUES(fuel_type), transmission = VALUES(transmission), insurance_expiry = VALUES(insurance_expiry), features = VALUES(features), status = VALUES(status)");
             $stmt->bind_param("issssssisssss", $user_id, $v_model, $v_maker, $v_reg, $v_type, $v_year, $v_color, $v_capacity, $v_fuel, $v_trans, $v_ins_exp, $v_features, $v_status);
             $stmt->execute();
+
+            // Vehicle Image Upload
+            if (isset($_FILES['vehicle_image']) && $_FILES['vehicle_image']['error'] === 0) {
+                $ext = pathinfo($_FILES['vehicle_image']['name'], PATHINFO_EXTENSION);
+                $new_v_name = "v_" . $user_id . "_" . time() . "." . $ext;
+                if (move_uploaded_file($_FILES['vehicle_image']['tmp_name'], $target_dir . $new_v_name)) {
+                    $stmt = $conn->prepare("UPDATE vehicles SET image_path = ? WHERE owner_id = ?");
+                    $stmt->bind_param("si", $new_v_name, $user_id);
+                    $stmt->execute();
+                }
+            }
         }
 
         $conn->commit();
@@ -383,6 +394,29 @@ endif; ?>
                                             class="ri-car-line text-emerald-600 text-base"></i></div>Vehicle
                                     Information
                                 </h3>
+
+                                <!-- Vehicle Photo Section -->
+                                <div class="mb-8 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                                    <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Vehicle Photo</p>
+                                    <div class="flex flex-col sm:flex-row items-center gap-6">
+                                        <div class="w-full sm:w-48 h-32 rounded-xl overflow-hidden bg-gray-200 border-2 border-white shadow-sm">
+                                            <?php 
+                                                $v_img = $vehicle['image_path'] ?? '';
+                                                $v_img_path = $v_img ? "../assets/images/partners/$v_img" : "../assets/images/vehicle_details/placeholder.jpg";
+                                            ?>
+                                            <img id="vehicle-preview" src="<?php echo htmlspecialchars($v_img_path); ?>" class="w-full h-full object-cover">
+                                        </div>
+                                        <div class="text-center sm:text-left">
+                                            <h4 class="text-sm font-bold text-gray-900 mb-1">Update Vehicle Photo</h4>
+                                            <p class="text-xs text-gray-500 mb-4">Upload a clear photo of your vehicle from the side or front.</p>
+                                            <label class="px-5 py-2 bg-white border border-gray-200 text-gray-700 text-xs font-bold rounded-lg hover:bg-gray-50 transition-colors cursor-pointer inline-flex items-center gap-2 shadow-sm">
+                                                <i class="ri-upload-2-line"></i> Change Photo
+                                                <input type="file" name="vehicle_image" class="hidden" accept="image/*" onchange="previewVehicleImage(this)">
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
                                     <div>
                                         <label class="block text-xs font-medium text-gray-500 mb-1.5">Vehicle Type</label>
@@ -673,6 +707,16 @@ endif; ?>
             </div>
 
             <script>
+                function previewVehicleImage(input) {
+                    if (input.files && input.files[0]) {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            document.getElementById('vehicle-preview').src = e.target.result;
+                        }
+                        reader.readAsDataURL(input.files[0]);
+                    }
+                }
+
                 function showSection(sectionId, btn) {
                     // Hide all sections
                     document.querySelectorAll('.section-content').forEach(section => {

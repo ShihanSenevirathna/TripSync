@@ -190,7 +190,7 @@ if ($booking['type'] === 'hotel') {
     if ($veh) {
         $service = [
             'name' => $veh['model'],
-            'image' => !empty($veh['image_path']) ? '../assets/images/' . $veh['image_path'] : '../assets/images/placeholder.jpg',
+            'image' => getVehicleImage($veh['image_path'], '../'),
             'capacity' => $veh['capacity'],
             'owner_name' => $veh['owner_name'],
             'owner_pic' => $veh['owner_pic'],

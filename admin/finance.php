@@ -54,8 +54,8 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
                          VALUES ($cust_id, $booking_id, $amount, 'credit', 'cash', 'completed', '$ref')");
 
             // 5. Notify Customer
-            $title = "Refund Processed";
-            $message = "Your refund of LKR " . number_format($amount) . " has been credited to your TripSync Wallet.";
+            $title = $conn->real_escape_string("Refund Processed");
+            $message = $conn->real_escape_string("Your refund of LKR " . number_format($amount) . " has been credited to your TripSync Wallet.");
             $conn->query("INSERT INTO notifications (user_id, title, message, type) VALUES ($cust_id, '$title', '$message', 'success')");
 
             $conn->query("COMMIT");

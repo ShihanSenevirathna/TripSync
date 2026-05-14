@@ -100,7 +100,7 @@ $features = array_map('trim', explode(',', $vehicle['features']));
                 <div class="col-span-2 row-span-2 relative group overflow-hidden">
                     <img alt="<?php echo htmlspecialchars($vehicle['model']); ?> main"
                         class="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-700"
-                        src="../assets/images/<?php echo htmlspecialchars($vehicle['image_path']); ?>">
+                        src="<?php echo getVehicleImage($vehicle['image_path'], '../'); ?>">
                     <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"></div>
                 </div>
                 <div class="relative group overflow-hidden">

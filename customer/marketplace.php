@@ -454,7 +454,7 @@ endforeach; ?>
                   <a class="block relative w-full h-52" href="vehicle_details.php?id=<?php echo $vehicle['id']; ?><?php echo $plan_param . $date_param; ?>">
                     <img alt="<?php echo $vehicle['model']; ?>"
                       class="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
-                      src="../assets/images/<?php echo $vehicle['image_path']; ?>">
+                      src="<?php echo getVehicleImage($vehicle['image_path'], '../'); ?>">
                     <?php if ($vehicle['rating'] >= 4.7): ?>
                     <span
                       class="absolute top-3 left-3 bg-amber-500 text-white text-xs font-semibold px-3 py-1 rounded-full">Popular</span>
