@@ -26,7 +26,8 @@ if (isset($_GET['type']) && (isset($_GET['id']) || isset($_GET['service_id'])) &
     $dropoff = $_GET['dropoff'] ?? null;
 
     // 1. Check for USER overlapping bookings of the same type
-    $userCheckStmt = $conn->prepare("SELECT id FROM bookings WHERE user_id = ? AND type = ? AND status IN ('pending', 'confirmed', 'arrived', 'in_progress') AND (start_date <= ? AND end_date >= ?)");
+    // Use < and > instead of <= and >= to allow same-day transitions (Check-out/Check-in on same day)
+    $userCheckStmt = $conn->prepare("SELECT id FROM bookings WHERE user_id = ? AND type = ? AND status IN ('pending', 'confirmed', 'arrived', 'in_progress') AND (start_date < ? AND end_date > ?)");
     $userCheckStmt->bind_param("isss", $userId, $type, $end_date, $start_date);
     $userCheckStmt->execute();
     if ($userCheckStmt->get_result()->num_rows > 0) {
@@ -36,7 +37,7 @@ if (isset($_GET['type']) && (isset($_GET['id']) || isset($_GET['service_id'])) &
 
     // 2. If vehicle, check if the VEHICLE itself is busy for these dates
     if ($type === 'vehicle') {
-        $vehCheckStmt = $conn->prepare("SELECT id FROM bookings WHERE item_id = ? AND type = 'vehicle' AND status IN ('pending', 'confirmed', 'arrived', 'in_progress') AND (start_date <= ? AND end_date >= ?)");
+        $vehCheckStmt = $conn->prepare("SELECT id FROM bookings WHERE item_id = ? AND type = 'vehicle' AND status IN ('pending', 'confirmed', 'arrived', 'in_progress') AND (start_date < ? AND end_date > ?)");
         $vehCheckStmt->bind_param("sss", $item_id, $end_date, $start_date);
         $vehCheckStmt->execute();
         if ($vehCheckStmt->get_result()->num_rows > 0) {

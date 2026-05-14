@@ -76,26 +76,19 @@ $planBookingsStmt->bind_param("i", $planId);
 $planBookingsStmt->execute();
 $planBookings = $planBookingsStmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
-// Find the hotel and vehicle relevant to the CURRENT DAY being viewed.
-// Hotel: check-in date <= current day AND check-out date > current day (covers this night).
+// Find the hotels and vehicle relevant to the CURRENT DAY being viewed.
+// Hotels: check-in date <= current day AND check-out date > current day (covers this night).
 // Vehicle: rental start <= current day AND rental end >= current day (covers this day of travel).
-$bookedHotel = null;
+$bookedHotels = [];
 $bookedVehicle = null;
-$fallbackHotel = null; // Most recent hotel if no date match
-$fallbackVehicle = null;
 
 foreach ($planBookings as $pb) {
   $bookStart = date('Y-m-d', strtotime($pb['start_date']));
   $bookEnd = date('Y-m-d', strtotime($pb['end_date']));
 
   if ($pb['type'] === 'hotel') {
-    // Save the first hotel as fallback (closest to trip start)
-    if (!$fallbackHotel)
-      $fallbackHotel = $pb;
-
     // Perfect match: check-in on or before current day AND check-out after current day
     if ($bookStart <= $currentDayDateStr && $bookEnd > $currentDayDateStr) {
-      if (!$bookedHotel) {
         // Resolve Google hotel name if needed
         if (empty($pb['hotel_name']) && strpos($pb['item_id'], 'google_') === 0) {
           if (!class_exists('GooglePlacesAPI'))
@@ -109,8 +102,7 @@ foreach ($planBookings as $pb) {
             $pb['hotel_img'] = !empty($details['photos']) ? $details['photos'][0] : '';
           }
         }
-        $bookedHotel = $pb;
-      }
+        $bookedHotels[] = $pb;
     }
   }
 
@@ -119,36 +111,6 @@ foreach ($planBookings as $pb) {
     if (!$bookedVehicle) {
       $bookedVehicle = $pb;
     }
-  }
-}
-
-// If no exact day-match found, show the nearest upcoming or most recent booking
-if (!$bookedHotel && $fallbackHotel) {
-  $fb = $fallbackHotel;
-  if (empty($fb['hotel_name']) && strpos($fb['item_id'], 'google_') === 0) {
-    if (!class_exists('GooglePlacesAPI'))
-      require_once '../api/google_places_api.php';
-    $googleApi = new GooglePlacesAPI();
-    $place_id = str_replace('google_', '', $fb['item_id']);
-    $details = $googleApi->getDetailsByPlaceId($place_id);
-    if ($details) {
-      $fb['hotel_name'] = $details['name'];
-      $fb['hotel_location'] = $details['address'];
-      $fb['hotel_img'] = !empty($details['photos']) ? $details['photos'][0] : '';
-    }
-    $fallbackHotel = $fb;
-  }
-  // Only show fallback if it's the ONLY hotel (single hotel for whole trip)
-  // If there are multiple hotel bookings for different days, don't show wrong one
-  $hotelCount = count(array_filter($planBookings, fn($b) => $b['type'] === 'hotel'));
-  if ($hotelCount === 1) {
-    $bookedHotel = $fallbackHotel;
-  }
-}
-if (!$bookedVehicle && $fallbackVehicle) {
-  $vehicleCount = count(array_filter($planBookings, fn($b) => $b['type'] === 'vehicle'));
-  if ($vehicleCount === 1) {
-    $bookedVehicle = $fallbackVehicle;
   }
 }
 
@@ -374,35 +336,39 @@ $lastDayDest = !empty($destinations) ? end($destinations)['location_name'] : ($l
 ?>
                 <div class="mb-3">
                   <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5"><i class="ri-hotel-bed-line text-teal-500"></i> Accommodation</p>
-                  <?php if ($bookedHotel): ?>
-                  <a href="booking_confirmation.php?id=<?php echo $bookedHotel['id']; ?>" class="flex items-center gap-3 p-3 bg-teal-50 border border-teal-100 rounded-xl hover:border-teal-400 transition-all group">
-                    <div class="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 border border-teal-100">
-                      <?php
-  $hImg = $bookedHotel['hotel_img'] ?? '';
-  if (!empty($hImg) && strpos($hImg, 'http') === false) {
-    $hImg = '../assets/images/' . $hImg;
-  }
-  if (empty($hImg))
-    $hImg = '../assets/images/hotel_details/main.jpg';
-?>
-                      <img src="<?php echo htmlspecialchars($hImg); ?>" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" onerror="this.src='../assets/images/hotel_details/main.jpg'">
+                  <?php if (!empty($bookedHotels)): ?>
+                    <div class="space-y-2">
+                    <?php foreach ($bookedHotels as $bh): ?>
+                    <a href="booking_confirmation.php?id=<?php echo $bh['id']; ?>" class="flex items-center gap-3 p-3 bg-teal-50 border border-teal-100 rounded-xl hover:border-teal-400 transition-all group">
+                      <div class="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 border border-teal-100">
+                        <?php
+    $hImg = $bh['hotel_img'] ?? '';
+    if (!empty($hImg) && strpos($hImg, 'http') === false) {
+      $hImg = '../assets/images/' . $hImg;
+    }
+    if (empty($hImg))
+      $hImg = '../assets/images/hotel_details/main.jpg';
+  ?>
+                        <img src="<?php echo htmlspecialchars($hImg); ?>" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" onerror="this.src='../assets/images/hotel_details/main.jpg'">
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <p class="text-sm font-bold text-gray-900 truncate"><?php echo htmlspecialchars($bh['hotel_name'] ?? 'Hotel Booking'); ?></p>
+                        <?php if (!empty($bh['hotel_location'])): ?>
+                        <p class="text-xs text-gray-500 truncate flex items-center gap-1"><i class="ri-map-pin-line text-teal-400"></i><?php echo htmlspecialchars($bh['hotel_location']); ?></p>
+                        <?php
+    endif; ?>
+                        <p class="text-xs text-gray-500 mt-0.5"><?php echo date('M d', strtotime($bh['start_date'])); ?> &rarr; <?php echo date('M d', strtotime($bh['end_date'])); ?></p>
+                      </div>
+                      <div class="flex-shrink-0 text-right">
+                        <?php
+    $hStatusClasses = ['pending' => 'bg-amber-50 text-amber-700 border-amber-200', 'confirmed' => 'bg-emerald-50 text-emerald-700 border-emerald-200', 'completed' => 'bg-gray-100 text-gray-600 border-gray-200'];
+    $hStatusClass = $hStatusClasses[$bh['status']] ?? 'bg-gray-100 text-gray-600 border-gray-200';
+  ?>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border <?php echo $hStatusClass; ?>"><?php echo ucfirst($bh['status']); ?></span>
+                      </div>
+                    </a>
+                    <?php endforeach; ?>
                     </div>
-                    <div class="flex-1 min-w-0">
-                      <p class="text-sm font-bold text-gray-900 truncate"><?php echo htmlspecialchars($bookedHotel['hotel_name'] ?? 'Hotel Booking'); ?></p>
-                      <?php if (!empty($bookedHotel['hotel_location'])): ?>
-                      <p class="text-xs text-gray-500 truncate flex items-center gap-1"><i class="ri-map-pin-line text-teal-400"></i><?php echo htmlspecialchars($bookedHotel['hotel_location']); ?></p>
-                      <?php
-  endif; ?>
-                      <p class="text-xs text-gray-500 mt-0.5"><?php echo date('M d', strtotime($bookedHotel['start_date'])); ?> &rarr; <?php echo date('M d', strtotime($bookedHotel['end_date'])); ?></p>
-                    </div>
-                    <div class="flex-shrink-0 text-right">
-                      <?php
-  $hStatusClasses = ['pending' => 'bg-amber-50 text-amber-700 border-amber-200', 'confirmed' => 'bg-emerald-50 text-emerald-700 border-emerald-200', 'completed' => 'bg-gray-100 text-gray-600 border-gray-200'];
-  $hStatusClass = $hStatusClasses[$bookedHotel['status']] ?? 'bg-gray-100 text-gray-600 border-gray-200';
-?>
-                      <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border <?php echo $hStatusClass; ?>"><?php echo ucfirst($bookedHotel['status']); ?></span>
-                    </div>
-                  </a>
                   <?php
 else: ?>
                   <a href="marketplace.php?tab=hotels&plan_id=<?php echo $planId; ?>&checkin=<?php echo $currentDayDateStr; ?>&checkout=<?php echo $nextDayDateStr; ?>&guests=<?php echo $travelers; ?>&near=<?php echo urlencode($lastDayDest); ?>" class="flex items-center gap-3 p-3 bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl hover:border-teal-400 hover:bg-teal-50/50 transition-all group">

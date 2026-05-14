@@ -79,8 +79,8 @@ if (!empty($qs_checkin) && !empty($qs_checkout)) {
         WHERE type = 'vehicle' 
         AND status IN ('confirmed', 'arrived', 'in_progress', 'pending')
         AND (
-            (start_date <= '" . $conn->real_escape_string($qs_checkout) . " 23:59:59') AND 
-            (end_date >= '" . $conn->real_escape_string($qs_checkin) . " 00:00:00')
+            (start_date < '" . $conn->real_escape_string($qs_checkout) . " 23:59:59') AND 
+            (end_date > '" . $conn->real_escape_string($qs_checkin) . " 00:00:00')
         )
     )";
 }
